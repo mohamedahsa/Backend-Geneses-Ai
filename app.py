@@ -707,9 +707,102 @@ def backend_submit_code():
 
 
 # -----------------------------
-# Backend Routes
+# Files 5 APIs Backend
 # -----------------------------
+#=================== Chemistry Endpoint ===================#
+@app.route("/chemistry", methods=["POST"])
+def solve_chemistry():
+    try:
+        data = request.get_json()
+        if not data or "question" not in data:
+            return jsonify({"error": "Missing 'question' field"}), 400
 
+        # Forward request to AI API
+        ai_response = requests.post(f"{AI_BASE_URL}/chemistry", json=data)
+        
+        if ai_response.status_code != 200:
+            return jsonify({"error": "AI service failed", 
+                            "details": ai_response.text}), ai_response.status_code
+
+        result = ai_response.json()
+
+        # Add validation on AI response
+        if "answer" not in result:
+            return jsonify({"error": "Invalid AI response"}), 500
+
+        # Enrich with backend session ID
+        result["backend_session_id"] = str(uuid.uuid4())
+        result["backend_timestamp"] = datetime.now().isoformat()
+
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({"error": f"Backend error: {str(e)}"}), 500
+
+
+#=================== Image Analysis Endpoint ===================#
+@app.route("/image-analysis", methods=["POST"])
+def analyze_image_with_question():
+    try:
+        if "file" not in request.files:
+            return jsonify({"error": "Image file is required"}), 400
+
+        file = request.files["file"]
+        question = request.form.get("question")
+
+        # Validate file type
+        if not file.mimetype.startswith("image/"):
+            return jsonify({"error": "Please upload a valid image file"}), 400
+
+        # Forward to AI API (send multipart/form-data)
+        files = {"file": (file.filename, file.stream, file.mimetype)}
+        data = {"question": question} if question else {}
+
+        ai_response = requests.post(f"{AI_BASE_URL}/image-analysis", files=files, data=data)
+
+        if ai_response.status_code != 200:
+            return jsonify({"error": "AI service failed", 
+                            "details": ai_response.text}), ai_response.status_code
+
+        result = ai_response.json()
+
+        if "answer" not in result:
+            return jsonify({"error": "Invalid AI response"}), 500
+
+        # Enrich with backend session ID
+        result["backend_session_id"] = str(uuid.uuid4())
+        result["backend_timestamp"] = datetime.now().isoformat()
+
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({"error": f"Backend error: {str(e)}"}), 500
+
+
+#=================== History Endpoint ===================#
+@app.route("/history/<subject>", methods=["GET"])
+def get_conversation_history(subject):
+    try:
+        limit = request.args.get("limit", 10)
+
+        ai_response = requests.get(f"{AI_BASE_URL}/history/{subject}", params={"limit": limit})
+
+        if ai_response.status_code != 200:
+            return jsonify({"error": "AI service failed", 
+                            "details": ai_response.text}), ai_response.status_code
+
+        result = ai_response.json()
+
+        if "history" not in result:
+            return jsonify({"error": "Invalid AI response"}), 500
+
+        # Add timestamp for backend tracking
+        result["backend_timestamp"] = datetime.now().isoformat()
+
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({"error": f"Backend error: {str(e)}"}), 500
 
 # ==========================
 # MAIN
